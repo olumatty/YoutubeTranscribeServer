@@ -1,11 +1,10 @@
 import { Request, Response } from 'express';
 import requestHandler from '../utils/requestHandler';
+import { env } from '../config/env';
 
 // CORS middleware function
 const corsHandler = requestHandler(async (req: Request, res: Response) => {
-	const allowedOrigins = [
-		...(process.env.ALLOWED_ORIGINS || '').split(','),
-	].filter(Boolean);
+	const allowedOrigins = env.ALLOWED_ORIGINS;
 	const origin = req.headers.origin;
 
 	if (origin && allowedOrigins.includes(origin)) {

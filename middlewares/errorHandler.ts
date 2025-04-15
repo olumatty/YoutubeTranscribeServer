@@ -4,6 +4,7 @@ import CustomError from '../utils/customError';
 import { ErrorResponse, HTTP_STATUS_CODES } from '../types/error';
 import { sanitizeErrorMessage } from '../utils/sanitizeErrorMessage';
 import requestHandler from '../utils/requestHandler';
+import { env } from '../config/env';
 
 /**
  * Global error handling middleware
@@ -34,7 +35,7 @@ export const errorHandler = (
 		code: isCustomError ? err.code : statusCode,
 	};
 
-	if (process.env.NODE_ENV !== 'production') {
+	if (!env.isProduction()) {
 		response.message = err.message;
 		response.details = isCustomError
 			? err.details

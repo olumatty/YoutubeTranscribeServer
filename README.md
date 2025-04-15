@@ -12,12 +12,20 @@ A robust, production-ready Node.js server template with Express, TypeScript, Pos
 - **Modular Architecture**: Well-organized code structure for scalability
 - **Environment Configuration**: Support for different environments (development, staging, production)
 - **Error Handling**: Centralized error management
+- **Authentication**: JWT-based authentication with cookie support
+- **File Upload**: Multer integration for handling file uploads
+- **CORS**: Configurable CORS handling
+- **Input Validation**: Zod schema validation
+- **Cloud Storage**: Backblaze B2 integration for file storage
+- **SMS Integration**: Africa's Talking SMS service support
 
 ## Prerequisites
 
 - Node.js (v16 or newer)
 - npm or yarn
 - PostgreSQL database
+- Backblaze B2 account (for file storage)
+- Africa's Talking account (for SMS services)
 
 ## Getting Started
 
@@ -38,15 +46,37 @@ yarn install
 
 ### 3. Set up environment variables
 
-Create a `.env` file in the project root:
+Copy the example environment file to create your own `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Then edit the `.env` file with your specific configuration:
 
 ```
-# Server Configuration
+# Database
+DATABASE_URL=postgresql://username:password@localhost:5432/your_database
+
+# Server
 PORT=8000
 NODE_ENV=development
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 
-# Database Configuration
-DATABASE_URL=postgresql://username:password@localhost:5432/your_database
+# Authentication
+JWT_SECRET=your_jwt_secret_key_here
+JWT_EXPIRES_IN=7d
+JWT_COOKIE_EXPIRES_IN=7
+
+# Backblaze B2 Storage
+B2_APPLICATION_KEY_ID=your_backblaze_app_key_id
+B2_APPLICATION_KEY=your_backblaze_app_key
+B2_BUCKET_ID=your_backblaze_bucket_id
+B2_BUCKET_NAME=your_backblaze_bucket_name
+
+# SMS (Or any other SMS provider)
+AT_API_KEY=your_africastalking_api_key
+AT_USERNAME=your_africastalking_username
 ```
 
 For different environments, you can create:
@@ -83,14 +113,17 @@ my-node-server-template/
 ├── controllers/        # API route controllers
 ├── cron/               # Scheduled jobs
 ├── db/                 # Database models and connection
+├── helpers/            # Helper functions and utilities
 ├── middlewares/        # Express middlewares
 ├── migrations/         # Database migrations
 ├── routes/             # API routes
+├── schemas/            # Zod validation schemas
 ├── scripts/            # Utility scripts
 ├── services/           # Business logic
 ├── types/              # TypeScript type definitions
 ├── utils/              # Utility functions
 ├── .env                # Environment variables (not committed)
+├── .env.example        # Example environment variables
 ├── .gitignore          # Git ignore file
 ├── drizzle.config.ts   # Drizzle ORM configuration
 ├── index.ts            # Application entry point
@@ -111,28 +144,31 @@ my-node-server-template/
 - **`npm run db:migrate`**: Apply migrations to the database
 - **`npm run db:studio`**: Launch Drizzle Studio (database GUI)
 
-## API Endpoints
+## Key Features
 
-The template includes a sample API endpoint:
+### Authentication
 
-- **GET /users**: Retrieve all users
+- JWT-based authentication with cookie support
+- Secure password hashing with bcrypt
+- Configurable token expiration
 
-## Database Schema
+### File Upload
 
-The template includes a sample users table with the following schema:
+- Multer integration for handling file uploads
+- Backblaze B2 cloud storage integration
+- Configurable file size limits and types
 
-```typescript
-export const usersTable = pgTable('users', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  email: text('email').notNull().unique(),
-  hashedPassword: text('hashed_password').notNull(),
-  name: text('name').notNull(),
-  accountType: text('account_type').notNull().default('regular'),
-  preferences: jsonb('preferences').default({}),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-```
+### SMS Integration
+
+- Africa's Talking SMS service integration
+- Configurable SMS templates and settings
+
+### Security
+
+- CORS configuration
+- Input validation with Zod
+- Centralized error handling
+- Secure cookie handling
 
 ## Adding New Features
 
@@ -154,6 +190,12 @@ export const usersTable = pgTable('users', {
 ### Adding a CRON job
 
 Add your scheduled job in the `cron` directory and import it in your application.
+
+### Adding new environment variables
+
+1. Add the new variables to `.env.example`
+2. Update the environment configuration in `config/env.ts`
+3. Add the new variables to your `.env` file
 
 ## Production Deployment
 

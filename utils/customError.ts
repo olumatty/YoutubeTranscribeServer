@@ -90,6 +90,31 @@ class CustomError extends Error {
 			details
 		);
 	}
+
+	/**
+	 * Creates a 502 Bad Gateway error for third-party service failures
+	 */
+	static ThirdPartyServiceError(message: string, details?: any) {
+		return new CustomError(message, HTTP_STATUS_CODES.BAD_GATEWAY, details);
+	}
+
+	/**
+	 * Creates a 503 Service Unavailable error for temporarily unavailable third-party services
+	 */
+	static ServiceUnavailable(message: string, details?: any) {
+		return new CustomError(
+			message,
+			HTTP_STATUS_CODES.SERVICE_UNAVAILABLE,
+			details
+		);
+	}
+
+	/**
+	 * Creates a 504 Gateway Timeout error for third-party service timeouts
+	 */
+	static GatewayTimeout(message: string, details?: any) {
+		return new CustomError(message, HTTP_STATUS_CODES.GATEWAY_TIMEOUT, details);
+	}
 }
 
 export default CustomError;

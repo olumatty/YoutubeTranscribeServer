@@ -1,9 +1,9 @@
 export {};
 
 declare global {
-  namespace NodeJS {
-    interface ProcessEnv {
-      POSTGRES_URL: string;
-    }
-  }
+	namespace NodeJS {
+		interface ProcessEnv {
+			POSTGRES_URL: string;
+		}
+	}
 }

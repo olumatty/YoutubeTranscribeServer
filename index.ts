@@ -1,31 +1,32 @@
+import './types';
+
 // Load Environmental Variables
-import './config/env';
+import './helpers/setupEnv';
+import { env } from './config/env';
 
 // Middleware imports
 import corsHandler from './middlewares/corsHandler';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
 
 import express from 'express';
-import users from './routes/users';
+import cookieParser from 'cookie-parser';
+import routes from './routes';
 
 const app = express();
 
 // Middlewares
 app.use(corsHandler);
 app.use(express.json());
+app.use(cookieParser()); // Add cookie parser for JWT token cookies
 
 // Routes
-app.use('/users', users);
+app.use(routes);
 
 // Error Handling
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-export default app;
-
-// export single server start time instance
-export const SERVER_START_TIME = Date.now();
-
 // connection
-const port = process.env.PORT || 8000;
-app.listen(port, () => console.log(`Listening to port ${port}`));
+app.listen(env.PORT, () =>
+	console.log(`Server running on port ${env.PORT} in ${env.NODE_ENV} mode`)
+);
