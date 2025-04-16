@@ -18,6 +18,7 @@ A robust, production-ready Node.js server template with Express, TypeScript, Pos
 - **Input Validation**: Zod schema validation
 - **Cloud Storage**: Backblaze B2 integration for file storage
 - **SMS Integration**: Africa's Talking SMS service support
+- **Testing**: Vitest-based testing infrastructure with Supertest for API testing
 
 ## Prerequisites
 
@@ -120,17 +121,20 @@ my-node-server-template/
 ├── schemas/            # Zod validation schemas
 ├── scripts/            # Utility scripts
 ├── services/           # Business logic
+├── tests/              # Test files
 ├── types/              # TypeScript type definitions
 ├── utils/              # Utility functions
 ├── .env                # Environment variables (not committed)
 ├── .env.example        # Example environment variables
+├── .env.test           # Test environment variables
 ├── .gitignore          # Git ignore file
 ├── drizzle.config.ts   # Drizzle ORM configuration
 ├── index.ts            # Application entry point
 ├── nodemon.json        # Nodemon configuration
 ├── package.json        # Project dependencies
 ├── README.md           # Project documentation
-└── tsconfig.json       # TypeScript configuration
+├── tsconfig.json       # TypeScript configuration
+└── vitest.config.ts    # Vitest test configuration
 ```
 
 ## Available Scripts
@@ -143,6 +147,8 @@ my-node-server-template/
 - **`npm run db:generate`**: Generate migration files
 - **`npm run db:migrate`**: Apply migrations to the database
 - **`npm run db:studio`**: Launch Drizzle Studio (database GUI)
+- **`npm test`**: Run all tests
+- **`npm run test:watch`**: Run tests in watch mode
 
 ## Key Features
 
@@ -219,3 +225,26 @@ Add your scheduled job in the `cron` directory and import it in your application
 ## License
 
 ISC
+
+## Testing
+
+The project includes a comprehensive testing setup using Vitest and Supertest:
+
+1. **Unit Tests**: Test individual components and functions
+2. **Integration Tests**: Test API endpoints and database interactions
+3. **Environment**: Separate test environment with its own configuration
+
+To run tests:
+
+```bash
+# Copy the example env to your test env
+cp .env.example .env.test
+
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+Test files should be placed in the `tests/` directory with the `.test.ts` extension.
