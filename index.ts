@@ -1,23 +1,23 @@
-import './types';
+import "./types";
 
 // Load Environmental Variables
-import './helpers/setupEnv';
-import { env } from './config/env';
+import "./helpers/setupEnv";
+import { env } from "./config/env";
 
 // Middleware imports
-import corsHandler from './middlewares/corsHandler';
-import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
+import corsHandler from "./middlewares/corsHandler";
+import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 
-import express from 'express';
-import cookieParser from 'cookie-parser';
-import routes from './routes';
+import express from "express";
+import cookieParser from "cookie-parser";
+import routes from "./routes";
 
 const app = express();
 
 // Middlewares
 app.use(corsHandler);
 app.use(express.json());
-app.use(cookieParser()); // Add cookie parser for JWT token cookies
+app.use(cookieParser());
 
 // Routes
 app.use(routes);
