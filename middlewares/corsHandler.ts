@@ -1,16 +1,14 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response } from "express";
 import requestHandler from "../utils/requestHandler";
 import { env } from "../config/env";
 
 // CORS middleware function
-const corsHandler = async (req: Request, res: Response, next: NextFunction) => {
+const corsHandler = requestHandler(async (req: Request, res: Response) => {
 	const allowedOrigins = env.ALLOWED_ORIGINS;
 	const origin = req.headers.origin;
 
 	if (origin && allowedOrigins.includes(origin)) {
 		res.header("Access-Control-Allow-Origin", origin); // Allow the specific origin
-	} else if (origin === "https://youtube-transcribe-rho.vercel.app") {
-		res.header("Access-Control-Allow-Origin", origin);
 	}
 
 	res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -26,7 +24,8 @@ const corsHandler = async (req: Request, res: Response, next: NextFunction) => {
 	if (req.method === "OPTIONS") {
 		res.sendStatus(200);
 	}
-	next();
-};
+
+	return { data: null };
+}, "middleware");
 
 export default corsHandler;

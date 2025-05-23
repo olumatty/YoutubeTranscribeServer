@@ -21,8 +21,12 @@ app.use(cookieParser());
 // Routes
 app.use("/api/transcribe", transcriptionRouter);
 
-app.get("/", (_req, res) => {
-	res.status(200).send("YouTube Transcribe Server is running.");
+app.get("/health", (_req, res) => {
+	res.status(200).json({
+		status: "OK",
+		timestamp: new Date().toISOString(),
+		allowedOrigins: env.ALLOWED_ORIGINS,
+	});
 });
 
 // Error Handling
