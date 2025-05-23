@@ -134,3 +134,25 @@ out
 
 dist
 .vercel
+
+# Ignore common audio file formats
+*.mp3
+*.wav
+*.flac
+*.ogg
+*.aac
+*.m4a
+*.opus
+*.aiff
+*.wma
+
+# If you have specific directories for audio files
+audio/
+sounds/
+music/
+
+# If audio files are in a subfolder and you want to ignore the whole folder
+utils/temp_audio/
+utils/temp_music/
+utils/temp_sounds/
+

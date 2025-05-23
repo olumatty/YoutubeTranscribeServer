@@ -3,9 +3,12 @@ import ytdl from "@distube/ytdl-core";
 import fs from "fs";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
+import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { pipeline } from "@xenova/transformers";
 import { v4 as uuidv4 } from "uuid";
 import { TranscriptionResponse } from "../types/transcription";
+
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 const Output_Dir = path.join(__dirname, "temp_audio");
 
