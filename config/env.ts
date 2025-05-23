@@ -39,7 +39,7 @@ function isProduction(): boolean {
 export const env = {
 	// Server
 	PORT: getEnv("PORT", 4000),
-	NODE_ENV: getEnv("NODE_ENV", "development"),
+	NODE_ENV: getEnv("NODE_ENV", "production"),
 	ALLOWED_ORIGINS: getEnv(
 		"ALLOWED_ORIGINS",
 		"https://youtube-transcribe-rho.vercel.app"
@@ -90,8 +90,8 @@ const optionalEnvVars: Partial<
 > = {
 	// Server
 	PORT: 4000,
-	NODE_ENV: "development",
-	ALLOWED_ORIGINS: "http://localhost:5173",
+	NODE_ENV: "production",
+	ALLOWED_ORIGINS: "https://youtube-transcribe-rho.vercel.app",
 
 	// Auth
 	//JWT_EXPIRES_IN: '7d',
