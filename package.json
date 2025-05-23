@@ -2,9 +2,9 @@
 	"name": "sample-server",
 	"version": "1.0.0",
 	"description": "Sample Server",
-	"main": "dist/index.js",
+	"main": "index.ts",
 	"scripts": {
-		"start": "npm run build && node dist/index.js",
+		"start": "npm run build && node index.ts",
 		"dev": "nodemon index.ts",
 		"build": "rimraf dist && tsc",
 		"db:check": "drizzle-kit check",
