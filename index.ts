@@ -7,10 +7,9 @@ import { env } from "./config/env";
 // Middleware imports
 import corsHandler from "./middlewares/corsHandler";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
-
 import express from "express";
 import cookieParser from "cookie-parser";
-import routes from "./routes";
+import transcriptionRouter from "./routes/index";
 
 const app = express();
 
@@ -20,7 +19,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Routes
-app.use(routes);
+app.use("/api/transcribe", transcriptionRouter);
 
 // Error Handling
 app.use(notFoundHandler);

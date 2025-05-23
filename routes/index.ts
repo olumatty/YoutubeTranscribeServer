@@ -1,31 +1,35 @@
-import express from 'express';
-import authRoutes from './auth';
-import userRoutes from './user';
+import express, { RequestHandler } from "express";
+import transcribeYoutubeVideo from "../utils/TranscribeYoutubeVideos";
 
 const router = express.Router();
 
-// API prefix for api.paybeta.xyz
-const API_VERSION = '/v1';
-const SERVER_START_TIME = new Date().toUTCString();
+interface TranscriptionRequest {
+	youtubeUrl: string;
+}
 
-// Register routes
-router.use(`${API_VERSION}/auth`, authRoutes);
-router.use(`${API_VERSION}/user`, userRoutes);
+const transcribeHandler: RequestHandler<{}, any, TranscriptionRequest> = async (
+	req,
+	res
+) => {
+	const { youtubeUrl } = req.body;
 
-// Health check endpoint
-router.get(`/health`, (req, res) => {
-	res.status(200).json({
-		status: 'success',
-		message: `No worries, I'm doing okay. Been up since ${SERVER_START_TIME}`,
-		uptimeInSeconds: `${Math.floor(process.uptime())} secs`,
+	if (!youtubeUrl) {
+		res.status(400).json({ error: "YouTube URL is required" });
+		return;
+	}
+
+	const result = await transcribeYoutubeVideo(youtubeUrl);
+	if (result.error) {
+		res.status(500).json({ error: result.error });
+		return;
+	}
+
+	res.json({
+		transcription: result.transcription,
+		success: true,
 	});
-});
+};
 
-// Welcome endpoint
-router.get('/', (_req, res) => {
-	res.send(
-		'<h1 style="text-align: center; margin-top: 45vh; font-size: 4em;">Welcome to NodeJS API</h1>'
-	);
-});
+router.post("/", transcribeHandler);
 
 export default router;
