@@ -40,9 +40,10 @@ export const env = {
 	// Server
 	PORT: getEnv("PORT", 4000),
 	NODE_ENV: getEnv("NODE_ENV", "development"),
-	ALLOWED_ORIGINS: getEnv("ALLOWED_ORIGINS", "http://localhost:5173").split(
-		","
-	),
+	ALLOWED_ORIGINS: getEnv(
+		"ALLOWED_ORIGINS",
+		"https://youtube-transcribe-rho.vercel.app"
+	).split(","),
 	isDevelopment,
 	isProduction,
 
