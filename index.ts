@@ -21,6 +21,10 @@ app.use(cookieParser());
 // Routes
 app.use("/api/transcribe", transcriptionRouter);
 
+app.get("/", (_req, res) => {
+	res.status(200).send("YouTube Transcribe Server is running.");
+});
+
 // Error Handling
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -1,9 +1,9 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import requestHandler from "../utils/requestHandler";
 import { env } from "../config/env";
 
 // CORS middleware function
-const corsHandler = requestHandler(async (req: Request, res: Response) => {
+const corsHandler = async (req: Request, res: Response, next: NextFunction) => {
 	const allowedOrigins = env.ALLOWED_ORIGINS;
 	const origin = req.headers.origin;
 
@@ -23,10 +23,8 @@ const corsHandler = requestHandler(async (req: Request, res: Response) => {
 	// Handle preflight requests
 	if (req.method === "OPTIONS") {
 		res.sendStatus(200);
-		return { data: null };
 	}
-
-	return { data: null };
-}, "middleware");
+	next();
+};
 
 export default corsHandler;
