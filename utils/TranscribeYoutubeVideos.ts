@@ -43,7 +43,6 @@ async function downloadAudioWithYTDLP(
 		referer: youtubeUrl,
 		quiet: true,
 		cookies: cookiesPath,
-		forceIpv6: true,
 		userAgent:
 			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36", // Add a realistic user agent
 		addHeader: ["accept-language: en-US,en;q=0.9"],
