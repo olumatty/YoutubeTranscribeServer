@@ -31,7 +31,6 @@ async function downloadAudioWithYTDLP(
 		referer: youtubeUrl,
 		quiet: true,
 		cookies: "../www.youtube.com_cookies.txt",
-		proxy: "http://127.0.0.1:8080",
 	});
 }
 
