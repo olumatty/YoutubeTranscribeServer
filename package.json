@@ -6,7 +6,7 @@
 	"scripts": {
 		"start": "npm run build && node dist/index.js",
 		"dev": "nodemon index.ts",
-		"build": "rimraf dist && tsc",
+		"build": "rimraf dist && tsc && cp cookies.txt dist/",
 		"db:check": "drizzle-kit check",
 		"db:drop": "drizzle-kit drop",
 		"db:generate": "drizzle-kit generate",
