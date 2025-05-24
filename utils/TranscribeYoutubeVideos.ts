@@ -30,7 +30,7 @@ async function downloadAudioWithYTDLP(
 		noCheckCertificates: true,
 		referer: youtubeUrl,
 		quiet: true,
-		cookies: "../www.youtube.com_cookies.txt",
+		cookies: path.resolve(__dirname, "../www.youtube.com_cookies.txt"),
 	});
 }
 
