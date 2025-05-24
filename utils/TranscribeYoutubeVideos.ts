@@ -30,6 +30,11 @@ async function downloadAudioWithYTDLP(
 		throw new Error("Cookies file not found. Please update cookies.");
 	}
 
+	const cookiesContent = fs.readFileSync(cookiesPath, "utf-8");
+	if (!cookiesContent.trim()) {
+		throw new Error("Cookies file is empty. Please provide valid cookies.");
+	}
+
 	await youtubedl(youtubeUrl, {
 		extractAudio: true,
 		audioFormat: "mp3",
@@ -38,10 +43,12 @@ async function downloadAudioWithYTDLP(
 		referer: youtubeUrl,
 		quiet: true,
 		cookies: cookiesPath,
-		forceIpv4: true,
+		forceIpv6: true,
 		userAgent:
 			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36", // Add a realistic user agent
 		addHeader: ["accept-language: en-US,en;q=0.9"],
+		sleepInterval: 10,
+		retries: 5,
 	});
 }
 
