@@ -1,5 +1,5 @@
 import express, { Response, Request } from "express";
-import ytdl from "@distube/ytdl-core";
+import youtubedl from "youtube-dl-exec";
 import fs from "fs";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
@@ -15,6 +15,22 @@ const Output_Dir = path.join(__dirname, "temp_audio");
 if (!fs.existsSync(Output_Dir)) {
 	fs.mkdirSync(Output_Dir);
 	console.log(`[INFO] Created temporary audio directory: ${Output_Dir}`);
+}
+
+async function downloadAudioWithYTDLP(
+	youtubeUrl: string,
+	outputPath: string
+): Promise<void> {
+	console.log(`[INFO] Attempting to download audio to: ${outputPath}`);
+
+	await youtubedl(youtubeUrl, {
+		extractAudio: true,
+		audioFormat: "mp3",
+		output: outputPath,
+		noCheckCertificates: true,
+		referer: youtubeUrl,
+		quiet: true,
+	});
 }
 
 async function convertVideoToWav(
@@ -64,41 +80,12 @@ export default async function transcribeYoutubeVideo(
 	try {
 		console.log(`\n--- Transcription Request for URL: ${youtubeUrl} ---`);
 
-		if (!ytdl.validateURL(youtubeUrl)) {
-			console.warn(`[WARNING] Invalid YouTube URL provided: ${youtubeUrl}`);
-			return {
-				transcription: " ",
-				error: "Invalid Youtube URL",
-				success: false,
-			};
-		}
-
 		const fileId = uuidv4();
-		const rawAudioPath = path.join(Output_Dir, `${fileId}.mp4`);
+		const rawAudioPath = path.join(Output_Dir, `${fileId}.mp3`);
 		const wavAudioPath = path.join(Output_Dir, `${fileId}.wav`);
 		console.log(`[INFO] Attempting to download audio to: ${rawAudioPath}`);
-		await new Promise<void>((resolve, reject) => {
-			const audioStream = ytdl(youtubeUrl, {
-				quality: "highestaudio",
-				filter: "audioonly",
-			});
 
-			audioStream
-				.pipe(fs.createWriteStream(rawAudioPath))
-				.on("finish", () => {
-					console.log(`[INFO] Audio download complete: ${rawAudioPath}`);
-					resolve();
-				})
-				.on("error", (err) => {
-					console.error(`[ERROR] YTDL download stream error: ${err.message}`);
-
-					if (fs.existsSync(rawAudioPath)) {
-						fs.unlinkSync(rawAudioPath);
-						console.log(`[INFO] Cleaned up partial download: ${rawAudioPath}`);
-					}
-					reject(err);
-				});
-		});
+		await downloadAudioWithYTDLP(youtubeUrl, rawAudioPath);
 
 		const rawAudioStats = fs.statSync(rawAudioPath);
 		console.log(
@@ -160,7 +147,7 @@ export default async function transcribeYoutubeVideo(
 		console.log("[INFO] Temporary files cleaned up.");
 
 		const transcriptionText = Array.isArray(result)
-			? result[0]?.text || ""
+			? result.map((chunk) => chunk.text).join(" ")
 			: result.text || "";
 
 		console.log(
