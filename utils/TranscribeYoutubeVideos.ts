@@ -23,14 +23,21 @@ async function downloadAudioWithYTDLP(
 ): Promise<void> {
 	console.log(`[INFO] Attempting to download audio to: ${outputPath}`);
 
+	const cookiesPath = path.resolve(__dirname, "../cookies.txt");
+	console.log(`[INFO] Cookies path: ${cookiesPath}`);
+
+	if (!fs.existsSync(cookiesPath)) {
+		throw new Error("Cookies file not found. Please update cookies.");
+	}
+
 	await youtubedl(youtubeUrl, {
 		extractAudio: true,
 		audioFormat: "mp3",
-		output: outputPath,
+		output: path.resolve(outputPath),
 		noCheckCertificates: true,
 		referer: youtubeUrl,
 		quiet: true,
-		cookies: path.resolve(__dirname, "../www.youtube.com_cookies.txt"),
+		cookies: cookiesPath,
 	});
 }
 
