@@ -79,13 +79,22 @@ let transcriberInstance: any;
 async function getTranscriber() {
 	if (!transcriberInstance) {
 		console.log(
-			"[INFO] Initializing ASR pipeline (Xenova/whisper-small) for the first time..."
+			"[INFO] Initializing ASR pipeline (Xenova/whisper-tiny) for the first time..."
 		);
-		transcriberInstance = await pipeline(
-			"automatic-speech-recognition",
-			"Xenova/whisper-small"
-		);
-		console.log("[INFO] ASR pipeline initialized.");
+		try {
+			transcriberInstance = await pipeline(
+				"automatic-speech-recognition",
+				"Xenova/whisper-tiny"
+			);
+			console.log("[INFO] ASR pipeline initialized.");
+		} catch (error) {
+			console.error(
+				`[CRITICAL ERROR] Failed to initialize ASR pipeline (Xenova/whisper-tiny): ${
+					error instanceof Error ? error.message : String(error)
+				}`
+			);
+			throw error;
+		}
 	} else {
 		console.log("[INFO] Using existing ASR pipeline instance.");
 	}
