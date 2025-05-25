@@ -1,12 +1,13 @@
 import express, { Response, Request } from "express";
 import youtubedl from "youtube-dl-exec";
-import fs from "fs";
+import fs, { createReadStream } from "fs";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { pipeline } from "@xenova/transformers";
 import { v4 as uuidv4 } from "uuid";
 import { TranscriptionResponse } from "../types/transcription";
+import wav from "wav"; // eslint-disable-line @typescript-esli/no-unused-vars
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -104,82 +105,95 @@ async function getTranscriber() {
 export default async function transcribeYoutubeVideo(
 	youtubeUrl: string
 ): Promise<TranscriptionResponse> {
+	const fileId = uuidv4();
+	const rawAudioPath = path.join(Output_Dir, `${fileId}.mp3`);
+	const wavAudioPath = path.join(Output_Dir, `${fileId}.wav`);
+
 	try {
 		console.log(`\n--- Transcription Request for URL: ${youtubeUrl} ---`);
 
-		const fileId = uuidv4();
-		const rawAudioPath = path.join(Output_Dir, `${fileId}.mp3`);
-		const wavAudioPath = path.join(Output_Dir, `${fileId}.wav`);
-		console.log(`[INFO] Attempting to download audio to: ${rawAudioPath}`);
-
+		// Limit file size
+		const MAX_FILE_SIZE_MB = 20;
 		await downloadAudioWithYTDLP(youtubeUrl, rawAudioPath);
-
 		const rawAudioStats = fs.statSync(rawAudioPath);
+		if (rawAudioStats.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+			throw new Error(`Audio file exceeds ${MAX_FILE_SIZE_MB} MB limit`);
+		}
 		console.log(
 			`[INFO] Downloaded raw audio file size: ${rawAudioStats.size} bytes`
 		);
 
 		await convertVideoToWav(rawAudioPath, wavAudioPath);
-
 		const wavAudioStats = fs.statSync(wavAudioPath);
 		console.log(
 			`[INFO] Converted WAV audio file size: ${wavAudioStats.size} bytes`
 		);
 
-		console.log(`[INFO] Reading WAV file into buffer: ${wavAudioPath}`);
-		const audioBuffer = await fs.promises.readFile(wavAudioPath);
+		// Stream WAV file
+		console.log(`[INFO] Streaming WAV file: ${wavAudioPath}`);
+		const fileStream = createReadStream(wavAudioPath);
+		const wavReader = new wav.Reader();
+		fileStream.pipe(wavReader);
 
-		console.log(
-			`[INFO] Creating Float32Array from audioBuffer (byteLength: ${audioBuffer.byteLength})...`
-		);
+		const chunks: Buffer[] = [];
+		wavReader.on("data", (chunk: Buffer) => chunks.push(chunk));
+		await new Promise((resolve, reject) => {
+			wavReader.on("end", resolve);
+			wavReader.on("error", reject);
+		});
 
+		const audioBuffer = Buffer.concat(chunks);
 		const int16Array = new Int16Array(
 			audioBuffer.buffer,
 			audioBuffer.byteOffset,
 			audioBuffer.byteLength / 2
 		);
-
 		const floatArray = new Float32Array(int16Array.length);
-
 		const normalizationFactor = 32768;
-
 		for (let i = 0; i < floatArray.length; i++) {
 			floatArray[i] = int16Array[i] / normalizationFactor;
 		}
 
-		console.log("[INFO] Float32Array details:");
-		console.log("  - length:", floatArray.length);
-		console.log("  - First 10 values:", floatArray.slice(0, 10));
-		console.log("  - Last 10 values:", floatArray.slice(-10));
-		const isAllZeros = floatArray.every((val) => val === 0);
-		console.log("  - Is Float32Array all zeros (silent audio)?", isAllZeros);
+		console.log("[INFO] Float32Array details:", {
+			length: floatArray.length,
+			first10: floatArray.slice(0, 10),
+			last10: floatArray.slice(-10),
+			isAllZeros: floatArray.every((val) => val === 0),
+		});
 
 		const transcriber = await getTranscriber();
-
-		console.log(
-			"[INFO] Starting transcription with Xenova/whisper-small model..."
-		);
+		console.log("[INFO] Starting transcription with Xenova/whisper-tiny");
 		const result = await transcriber(floatArray, {
 			chunk_length_s: 30,
 			stride_length_s: 5,
 			language: "english",
 			task: "transcribe",
 		});
-		console.log("[INFO] Transcription process finished.");
+		console.log("[INFO] Transcription process finished");
 
-		console.log("[INFO] Cleaning up temporary files...");
-
-		await fs.promises.unlink(rawAudioPath);
-		await fs.promises.unlink(wavAudioPath);
-		console.log("[INFO] Temporary files cleaned up.");
+		// Cleanup
+		await Promise.all([
+			fs.promises
+				.unlink(rawAudioPath)
+				.catch((err) =>
+					console.warn(
+						`[WARN] Failed to delete ${rawAudioPath}: ${err.message}`
+					)
+				),
+			fs.promises
+				.unlink(wavAudioPath)
+				.catch((err) =>
+					console.warn(
+						`[WARN] Failed to delete ${wavAudioPath}: ${err.message}`
+					)
+				),
+		]);
+		console.log("[INFO] Temporary files cleaned up");
 
 		const transcriptionText = Array.isArray(result)
 			? result.map((chunk) => chunk.text).join(" ")
 			: result.text || "";
-
-		console.log(
-			`[INFO] Final transcription result length: ${transcriptionText.length}`
-		);
+		console.log(`[INFO] Transcription length: ${transcriptionText.length}`);
 		if (transcriptionText.length > 100) {
 			console.log(
 				`[INFO] Transcription snippet: "${transcriptionText.substring(
@@ -188,10 +202,8 @@ export default async function transcribeYoutubeVideo(
 				)}..."`
 			);
 		} else {
-			console.log(`[INFO] Full Transcription result: "${transcriptionText}"`);
+			console.log(`[INFO] Full transcription: "${transcriptionText}"`);
 		}
-
-		console.log(`--- End Transcription Request ---`);
 
 		return {
 			transcription: transcriptionText,
@@ -200,16 +212,25 @@ export default async function transcribeYoutubeVideo(
 		};
 	} catch (error) {
 		console.error(
-			`[CRITICAL ERROR] Transcription process failed: ${
+			`[CRITICAL ERROR] Transcription failed for ${youtubeUrl}: ${
 				error instanceof Error ? error.message : String(error)
 			}`
 		);
+		let errorMessage = `Failed to transcribe video: ${
+			error instanceof Error ? error.message : String(error)
+		}`;
+		if (error instanceof Error && error.message.includes("403")) {
+			errorMessage = "Invalid or expired cookies. Please update cookies.txt.";
+		}
+
+		await Promise.all([
+			fs.promises.unlink(rawAudioPath).catch(() => {}),
+			fs.promises.unlink(wavAudioPath).catch(() => {}),
+		]);
 
 		return {
 			transcription: "",
-			error: `Failed to transcribe video due to an unexpected error: ${
-				error instanceof Error ? error.message : "Unknown error"
-			}`,
+			error: errorMessage,
 			success: false,
 		};
 	}

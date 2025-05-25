@@ -17,17 +17,10 @@ const app = express();
 app.use(corsHandler);
 app.use(express.json());
 app.use(cookieParser());
+app.set("trust proxy", true);
 
 // Routes
 app.use("/api/transcribe", transcriptionRouter);
-
-app.get("/health", (_req, res) => {
-	res.status(200).json({
-		status: "OK",
-		timestamp: new Date().toISOString(),
-		allowedOrigins: env.ALLOWED_ORIGINS,
-	});
-});
 
 // Error Handling
 app.use(notFoundHandler);
