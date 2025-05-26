@@ -14,7 +14,7 @@ const transcribeHandler: RequestHandler<{}, any, TranscriptionRequest> = async (
 	const { youtubeUrl } = req.body;
 
 	if (!youtubeUrl) {
-		res.status(400).json({ error: "YouTube URL is required" });
+		res.status(400).json({success: false , error: "YouTube URL is required" });
 		return;
 	}
 

@@ -6,41 +6,41 @@ import { UpdateProfileInput } from '../schemas/user';
 /**
  * Get the current user's profile
  */
-export const getCurrentUser = requestHandler(async (req, res) => {
-	const user = req.user;
+//export const getCurrentUser = requestHandler(async (req, res) => {
+	//const user = req.user;
 
-	if (!user) {
-		throw CustomError.Unauthorized('Not authenticated');
-	}
+	//if (!user) {
+//		throw CustomError.Unauthorized('Not authenticated');
+//	}
 
 	// Remove sensitive data
-	const { password, ...userWithoutPassword } = user;
+	//const { password, ...userWithoutPassword } = user;
 
-	return {
-		data: userWithoutPassword,
-		message: 'User profile retrieved successfully',
-	};
-});
+	//return {
+	//	data: userWithoutPassword,
+	//	message: 'User profile retrieved successfully',
+	//};
+//});
 
 /**
  * Update the current user's profile
  */
-export const updateProfile = requestHandler(async (req, res) => {
-	const user = req.user;
-	const updateData: UpdateProfileInput = req.body;
+// export const updateProfile = requestHandler(async (req, res) => {
+// 	const user = req.user;
+// 	const updateData: UpdateProfileInput = req.body;
 
-	if (!user) {
-		throw CustomError.Unauthorized('Not authenticated');
-	}
+// 	if (!user) {
+// 		throw CustomError.Unauthorized('Not authenticated');
+// 	}
 
 	// Update the user
-	const updatedUser = await updateUserProfile(user.id, updateData);
+// 	const updatedUser = await updateUserProfile(user.id, updateData);
 
 	// Remove sensitive data
-	const { password, ...userWithoutPassword } = updatedUser;
+// 	const { password, ...userWithoutPassword } = updatedUser;
 
-	return {
-		data: userWithoutPassword,
-		message: 'Profile updated successfully',
-	};
-});
+//	return {
+//		data: userWithoutPassword,
+//		message: 'Profile updated successfully',
+//	};
+//});
