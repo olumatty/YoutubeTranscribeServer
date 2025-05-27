@@ -3,11 +3,10 @@ import fs, { createReadStream } from "fs";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import { pipeline } from "@xenova/transformers";
+import { cat, pipeline } from "@xenova/transformers";
 import { v4 as uuidv4 } from "uuid";
 import { TranscriptionResponse } from "../types/transcription";
-import { WaveFile } from "wavefile";
-
+import wav from "wav"; // eslint-disable-line @typescript-esli/no-unused-vars
 // import { updateYouTubeCookies } from "./updateCookies";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -67,7 +66,7 @@ async function downloadAudioWithYTDLP(
 		// await updateYouTubeCookies();
 	}
 
-	const MAX_FILE_SIZE_MB = 25;
+	const MAX_FILE_SIZE_MB = 50;
 	const downloadOptions = {
 		extractAudio: true,
 		audioFormat: "mp3",
@@ -77,7 +76,7 @@ async function downloadAudioWithYTDLP(
 		quiet: true,
 		cookies: cookiesPath,
 		userAgent:
-			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36", // Add a realistic user agent
 		addHeader: ["accept-language: en-US,en;q=0.9"],
 		sleepInterval: 10,
 		retries: 5,
@@ -87,7 +86,7 @@ async function downloadAudioWithYTDLP(
 		await youtubedl(youtubeUrl, downloadOptions);
 		const stats = fs.statSync(outputPath);
 		if (stats.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-			fs.unlinkSync(outputPath);
+			fs.unlinkSync(outputPath); // Clean up if file is too large
 			throw new Error(`Downloaded file exceeds ${MAX_FILE_SIZE_MB} MB limit`);
 		}
 	} catch (error) {
@@ -97,7 +96,7 @@ async function downloadAudioWithYTDLP(
 			String(error).includes("Login required")
 		) {
 			console.warn("[WARN] Invalid cookies detected, refreshing...");
-			// await updateYouTubeCookies();
+			//await updateYouTubeCookies();
 			await youtubedl(youtubeUrl, downloadOptions);
 			const stats = fs.statSync(outputPath);
 			if (stats.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
@@ -140,17 +139,17 @@ let transcriberInstance: any;
 async function getTranscriber() {
 	if (!transcriberInstance) {
 		console.log(
-			"[INFO] Initializing ASR pipeline (Xenova/whisper-tiny.en) for the first time..."
+			"[INFO] Initializing ASR pipeline (Xenova/whisper-tiny) for the first time..."
 		);
 		try {
 			transcriberInstance = await pipeline(
 				"automatic-speech-recognition",
-				"Xenova/whisper-tiny.en"
+				"Xenova/whisper-tiny"
 			);
 			console.log("[INFO] ASR pipeline initialized.");
 		} catch (error) {
 			console.error(
-				`[CRITICAL ERROR] Failed to initialize ASR pipeline (Xenova/whisper-tiny.en): ${
+				`[CRITICAL ERROR] Failed to initialize ASR pipeline (Xenova/whisper-tiny): ${
 					error instanceof Error ? error.message : String(error)
 				}`
 			);
@@ -178,42 +177,43 @@ export default async function transcribeYoutubeVideo(
 		await convertVideoToWav(rawAudioPath, wavAudioPath);
 		console.log(`[INFO] Converted to WAV: ${wavAudioPath}`);
 
-		console.log(
-			`[INFO] Reading WAV file into memory with wavefile: ${wavAudioPath}`
+		console.log(`[INFO] Streaming WAV file: ${wavAudioPath}`);
+
+		/*
+		const fileStream = createReadStream(wavAudioPath);
+		const wavReader = new wav.Reader();
+		fileStream.pipe(wavReader);
+
+		const chunks: Buffer[] = [];
+		wavReader.on("data", (chunk: Buffer) => chunks.push(chunk));
+		await new Promise((resolve, reject) => {
+			wavReader.on("end", resolve);
+			wavReader.on("error", reject);
+		});
+
+		const audioBuffer = Buffer.concat(chunks);
+		const int16Array = new Int16Array(
+			audioBuffer.buffer,
+			audioBuffer.byteOffset,
+			audioBuffer.byteLength / 2
 		);
-		const wavBuffer = fs.readFileSync(wavAudioPath);
-		const wav = new WaveFile(wavBuffer);
-
-		// Convert to 32-bit float and 16kHz sample rate as expected by Whisper
-		wav.toBitDepth("32f"); // This sets the internal bit depth to 32-bit float
-		wav.toSampleRate(16000); // And sample rate to 16kHz
-
-		const audioData = wav.getSamples(); // This will return a Float64Array or an array of Float64Arrays
-
-		let float32AudioData: Float32Array;
-
-		if (Array.isArray(audioData)) {
-			// If stereo or multi-channel, getSamples returns an array of Float64Array.
-			// We need to convert the first channel to Float32Array.
-			const firstChannel = audioData[0] as Float64Array; // Assert to Float64Array
-			float32AudioData = new Float32Array(firstChannel); // Convert to Float32Array
-		} else {
-			// If mono, getSamples returns a single Float64Array.
-			const monoChannel = audioData as Float64Array; // Assert to Float64Array
-			float32AudioData = new Float32Array(monoChannel); // Convert to Float32Array
+		const floatArray = new Float32Array(int16Array.length);
+		const normalizationFactor = 32768;
+		for (let i = 0; i < floatArray.length; i++) {
+			floatArray[i] = int16Array[i] / normalizationFactor;
 		}
 
 		console.log("[INFO] Float32Array details:", {
-			length: float32AudioData.length,
-			first10: float32AudioData.slice(0, 10),
-			last10: float32AudioData.slice(-10),
-			isAllZeros: float32AudioData.every((val) => val === 0),
+			length: floatArray.length,
+			first10: floatArray.slice(0, 10),
+			last10: floatArray.slice(-10),
+			isAllZeros: floatArray.every((val) => val === 0),
 		});
+		*/
 
 		const transcriber = await getTranscriber();
 		console.log("[INFO] Starting transcription with Xenova/whisper-tiny.en");
-		// Pass the converted Float32Array directly
-		const result = await transcriber(float32AudioData, {
+		const result = await transcriber(wav, {
 			chunk_length_s: 20,
 			stride_length_s: 3,
 			language: "english",
@@ -252,6 +252,11 @@ export default async function transcribeYoutubeVideo(
 			);
 		} else {
 			console.log(`[INFO] Full transcription: "${transcriptionText}"`);
+		}
+
+		if (global.gc) {
+			global.gc();
+			console.log("[INFO] Triggered garbage collection");
 		}
 
 		return {
