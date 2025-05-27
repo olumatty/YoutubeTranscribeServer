@@ -1,20 +1,20 @@
-import express, { Response, Request } from "express";
 import youtubedl from "youtube-dl-exec";
 import fs, { createReadStream } from "fs";
 import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-import { pipeline } from "@xenova/transformers";
+import { cat, pipeline } from "@xenova/transformers";
 import { v4 as uuidv4 } from "uuid";
 import { TranscriptionResponse } from "../types/transcription";
 import wav from "wav"; // eslint-disable-line @typescript-esli/no-unused-vars
+import { updateYouTubeCookies } from "./updateCookies";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 const Output_Dir = path.join(__dirname, "temp_audio");
 
 if (!fs.existsSync(Output_Dir)) {
-	fs.mkdirSync(Output_Dir);
+	fs.mkdirSync(Output_Dir, { recursive: true });
 	console.log(`[INFO] Created temporary audio directory: ${Output_Dir}`);
 }
 
@@ -36,7 +36,38 @@ async function downloadAudioWithYTDLP(
 		throw new Error("Cookies file is empty. Please provide valid cookies.");
 	}
 
-	await youtubedl(youtubeUrl, {
+	const lines = cookiesContent
+		.split("\n")
+		.filter((line) => !line.startsWith("#") && line.trim());
+	const hasValidCookies = lines.some((line) => {
+		const parts = line.split("\t");
+		if (parts.length < 7) return false; // Ensure all parts are present
+		const [domain, hostOnly, path, secure, expires, name, value] = parts;
+		const expiry = parseInt(expires, 10);
+		const now = Math.floor(Date.now() / 1000);
+		return (
+			(domain.includes("youtube.com") || domain.includes("google.com")) &&
+			[
+				"SID",
+				"__Secure-3PSID",
+				"APISID",
+				"SAPISID",
+				"CONSENT",
+				"SOCS",
+			].includes(name) &&
+			expiry > now
+		);
+	});
+
+	if (!hasValidCookies) {
+		console.warn(
+			"[WARN] No valid cookies found in cookies.txt. Please update your cookies."
+		);
+		await updateYouTubeCookies();
+	}
+
+	const MAX_FILE_SIZE_MB = 50;
+	const downloadOptions = {
 		extractAudio: true,
 		audioFormat: "mp3",
 		output: path.resolve(outputPath),
@@ -49,7 +80,35 @@ async function downloadAudioWithYTDLP(
 		addHeader: ["accept-language: en-US,en;q=0.9"],
 		sleepInterval: 10,
 		retries: 5,
-	});
+	};
+
+	try {
+		await youtubedl(youtubeUrl, downloadOptions);
+		const stats = fs.statSync(outputPath);
+		if (stats.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+			fs.unlinkSync(outputPath); // Clean up if file is too large
+			throw new Error(`Downloaded file exceeds ${MAX_FILE_SIZE_MB} MB limit`);
+		}
+	} catch (error) {
+		if (
+			error instanceof Error ||
+			String(error).includes("403") ||
+			String(error).includes("Login required")
+		) {
+			console.warn("[WARN] Invalid cookies detected, refreshing...");
+			await updateYouTubeCookies();
+			await youtubedl(youtubeUrl, downloadOptions);
+			const stats = fs.statSync(outputPath);
+			if (stats.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+				fs.unlinkSync(outputPath);
+				throw new Error(
+					`Audio file exceeds ${MAX_FILE_SIZE_MB} MB limit. Try a shorter video.`
+				);
+			}
+		} else {
+			throw error;
+		}
+	}
 }
 
 async function convertVideoToWav(
@@ -112,24 +171,12 @@ export default async function transcribeYoutubeVideo(
 	try {
 		console.log(`\n--- Transcription Request for URL: ${youtubeUrl} ---`);
 
-		// Limit file size
-		const MAX_FILE_SIZE_MB = 20;
 		await downloadAudioWithYTDLP(youtubeUrl, rawAudioPath);
-		const rawAudioStats = fs.statSync(rawAudioPath);
-		if (rawAudioStats.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-			throw new Error(`Audio file exceeds ${MAX_FILE_SIZE_MB} MB limit`);
-		}
-		console.log(
-			`[INFO] Downloaded raw audio file size: ${rawAudioStats.size} bytes`
-		);
+		console.log(`[INFO] Downloaded audio to: ${rawAudioPath}`);
 
 		await convertVideoToWav(rawAudioPath, wavAudioPath);
-		const wavAudioStats = fs.statSync(wavAudioPath);
-		console.log(
-			`[INFO] Converted WAV audio file size: ${wavAudioStats.size} bytes`
-		);
+		console.log(`[INFO] Converted to WAV: ${wavAudioPath}`);
 
-		// Stream WAV file
 		console.log(`[INFO] Streaming WAV file: ${wavAudioPath}`);
 		const fileStream = createReadStream(wavAudioPath);
 		const wavReader = new wav.Reader();
@@ -171,7 +218,6 @@ export default async function transcribeYoutubeVideo(
 		});
 		console.log("[INFO] Transcription process finished");
 
-		// Cleanup
 		await Promise.all([
 			fs.promises
 				.unlink(rawAudioPath)
@@ -205,6 +251,11 @@ export default async function transcribeYoutubeVideo(
 			console.log(`[INFO] Full transcription: "${transcriptionText}"`);
 		}
 
+		if (global.gc) {
+			global.gc();
+			console.log("[INFO] Triggered garbage collection");
+		}
+
 		return {
 			transcription: transcriptionText,
 			error: "",
@@ -212,14 +263,16 @@ export default async function transcribeYoutubeVideo(
 		};
 	} catch (error) {
 		console.error(
-			`[CRITICAL ERROR] Transcription failed for ${youtubeUrl}: ${
-				error instanceof Error ? error.message : String(error)
-			}`
+			`[CRITICAL ERROR] Transcription failed for ${youtubeUrl}:`,
+			error instanceof Error ? error.stack : String(error)
 		);
 		let errorMessage = `Failed to transcribe video: ${
 			error instanceof Error ? error.message : String(error)
 		}`;
-		if (error instanceof Error && error.message.includes("403")) {
+		if (
+			errorMessage.includes("403") ||
+			errorMessage.includes("Login Required")
+		) {
 			errorMessage = "Invalid or expired cookies. Please update cookies.txt.";
 		}
 
