@@ -44,6 +44,8 @@ export const env = {
 		"ALLOWED_ORIGINS",
 		"https://youtube-transcribe-rho.vercel.app"
 	).split(","),
+	YOUTUBE_EMAIL: getEnv("YOUTUBE_EMAIL", "olumatty83@gmail.com"),
+	YOUTUBE_PASSWORD: getEnv("YOUTUBE_PASSWORD", "Olumatty007$"),
 	isDevelopment,
 	isProduction,
 
@@ -92,6 +94,8 @@ const optionalEnvVars: Partial<
 	PORT: 4000,
 	NODE_ENV: "production",
 	ALLOWED_ORIGINS: "https://youtube-transcribe-rho.vercel.app",
+	YOUTUBE_EMAIL: "olumatty83@gmail.com",
+	YOUTUBE_PASSWORD: "Olumatty007$",
 
 	// Auth
 	//JWT_EXPIRES_IN: '7d',

@@ -1,9 +1,10 @@
-import puppeteer from "puppeteer";
+import puppeteer, { Cookie } from "puppeteer";
 import fs from "fs/promises";
 import path from "path";
+import { env } from "../config/env";
 
 export async function updateYouTubeCookies(): Promise<void> {
-	if (!process.env.YOUTUBE_EMAIL || !process.env.YOUTUBE_PASSWORD) {
+	if (!env.YOUTUBE_EMAIL || !env.YOUTUBE_PASSWORD) {
 		throw new Error(
 			"Missing YOUTUBE_EMAIL or YOUTUBE_PASSWORD environment variables"
 		);
@@ -20,10 +21,10 @@ export async function updateYouTubeCookies(): Promise<void> {
 		await page.goto("https://www.youtube.com", { waitUntil: "networkidle2" });
 
 		// Simulate login
-		await page.type("#identifierId", process.env.YOUTUBE_EMAIL);
+		await page.type("#identifierId", env.YOUTUBE_EMAIL);
 		await page.click("#identifierNext");
-		await new Promise((resolve) => setTimeout(resolve, 2000)); // Replace waitForTimeout
-		await page.type('input[type="password"]', process.env.YOUTUBE_PASSWORD);
+		await new Promise((resolve) => setTimeout(resolve, 2000));
+		await page.type('input[type="password"]', env.YOUTUBE_PASSWORD);
 		await page.click("#passwordNext");
 		await page.waitForNavigation({ waitUntil: "networkidle2" });
 
@@ -41,7 +42,7 @@ export async function updateYouTubeCookies(): Promise<void> {
 		);
 		const cookiesPath = path.resolve(__dirname, "../cookies.txt");
 		const netscapeCookies = cookies
-			.map((cookie) => {
+			.map((cookie: Cookie) => {
 				const isHostOnly = !cookie.domain.startsWith(".");
 				return `${cookie.domain}\t${isHostOnly ? "FALSE" : "TRUE"}\t${
 					cookie.path
@@ -50,6 +51,7 @@ export async function updateYouTubeCookies(): Promise<void> {
 				}\t${cookie.value}`;
 			})
 			.join("\n");
+
 		await fs.writeFile(cookiesPath, netscapeCookies);
 		console.log("[INFO] Updated cookies.txt successfully");
 	} catch (error) {
