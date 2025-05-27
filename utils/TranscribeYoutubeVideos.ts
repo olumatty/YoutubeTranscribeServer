@@ -63,7 +63,7 @@ async function downloadAudioWithYTDLP(
 		console.warn(
 			"[WARN] No valid cookies found in cookies.txt. Please update your cookies."
 		);
-		await updateYouTubeCookies();
+		// await updateYouTubeCookies();
 	}
 
 	const MAX_FILE_SIZE_MB = 50;
@@ -96,7 +96,7 @@ async function downloadAudioWithYTDLP(
 			String(error).includes("Login required")
 		) {
 			console.warn("[WARN] Invalid cookies detected, refreshing...");
-			await updateYouTubeCookies();
+			//await updateYouTubeCookies();
 			await youtubedl(youtubeUrl, downloadOptions);
 			const stats = fs.statSync(outputPath);
 			if (stats.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
