@@ -178,6 +178,8 @@ export default async function transcribeYoutubeVideo(
 		console.log(`[INFO] Converted to WAV: ${wavAudioPath}`);
 
 		console.log(`[INFO] Streaming WAV file: ${wavAudioPath}`);
+
+		/*
 		const fileStream = createReadStream(wavAudioPath);
 		const wavReader = new wav.Reader();
 		fileStream.pipe(wavReader);
@@ -207,10 +209,11 @@ export default async function transcribeYoutubeVideo(
 			last10: floatArray.slice(-10),
 			isAllZeros: floatArray.every((val) => val === 0),
 		});
+		*/
 
 		const transcriber = await getTranscriber();
 		console.log("[INFO] Starting transcription with Xenova/whisper-tiny.en");
-		const result = await transcriber(floatArray, {
+		const result = await transcriber(wavAudioPath, {
 			chunk_length_s: 20,
 			stride_length_s: 3,
 			language: "english",
