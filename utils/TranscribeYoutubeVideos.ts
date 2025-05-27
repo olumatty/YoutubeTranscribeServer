@@ -184,7 +184,6 @@ export default async function transcribeYoutubeVideo(
 		const wavBuffer = fs.readFileSync(wavAudioPath);
 		const wav = new WaveFile(wavBuffer);
 
-		// Convert to 32-bit float and 16kHz sample rate as expected by Whisper
 		wav.toBitDepth("32f"); // This sets the internal bit depth to 32-bit float
 		wav.toSampleRate(16000); // And sample rate to 16kHz
 
@@ -193,8 +192,6 @@ export default async function transcribeYoutubeVideo(
 		let float32AudioData: Float32Array;
 
 		if (Array.isArray(audioData)) {
-			// If stereo or multi-channel, getSamples returns an array of Float64Array.
-			// We need to convert the first channel to Float32Array.
 			const firstChannel = audioData[0] as Float64Array; // Assert to Float64Array
 			float32AudioData = new Float32Array(firstChannel); // Convert to Float32Array
 		} else {
@@ -214,8 +211,8 @@ export default async function transcribeYoutubeVideo(
 		console.log("[INFO] Starting transcription with Xenova/whisper-tiny.en");
 		// Pass the converted Float32Array directly
 		const result = await transcriber(float32AudioData, {
-			chunk_length_s: 20,
-			stride_length_s: 3,
+			chunk_length_s: 10,
+			stride_length_s: 2,
 			language: "english",
 			task: "transcribe",
 		});

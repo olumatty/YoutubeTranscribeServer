@@ -14,20 +14,27 @@ const transcribeHandler: RequestHandler<{}, any, TranscriptionRequest> = async (
 	const { youtubeUrl } = req.body;
 
 	if (!youtubeUrl) {
-		res.status(400).json({success: false , error: "YouTube URL is required" });
+		res.status(400).json({ success: false, error: "YouTube URL is required" });
 		return;
 	}
 
-	const result = await transcribeYoutubeVideo(youtubeUrl);
-	if (result.error) {
-		res.status(500).json({ error: result.error });
-		return;
-	}
+	try {
+		const result = await transcribeYoutubeVideo(youtubeUrl);
+		if (result.error) {
+			res.status(500).json({ error: result.error });
+			return;
+		}
 
-	res.json({
-		transcription: result.transcription,
-		success: true,
-	});
+		res.json({
+			transcription: result.transcription,
+			success: true,
+		});
+	} catch (error) {
+		console.error(
+			`[CRITICAL ERROR] Transcription failed for ${youtubeUrl}:`,
+			error instanceof Error ? error.stack : String(error)
+		);
+	}
 };
 
 router.post("/", transcribeHandler);
