@@ -7,7 +7,7 @@ import { cat, pipeline } from "@xenova/transformers";
 import { v4 as uuidv4 } from "uuid";
 import { TranscriptionResponse } from "../types/transcription";
 import wav from "wav"; // eslint-disable-line @typescript-esli/no-unused-vars
-import { updateYouTubeCookies } from "./updateCookies";
+// import { updateYouTubeCookies } from "./updateCookies";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -209,10 +209,10 @@ export default async function transcribeYoutubeVideo(
 		});
 
 		const transcriber = await getTranscriber();
-		console.log("[INFO] Starting transcription with Xenova/whisper-tiny");
+		console.log("[INFO] Starting transcription with Xenova/whisper-tiny.en");
 		const result = await transcriber(floatArray, {
-			chunk_length_s: 30,
-			stride_length_s: 5,
+			chunk_length_s: 20,
+			stride_length_s: 3,
 			language: "english",
 			task: "transcribe",
 		});
