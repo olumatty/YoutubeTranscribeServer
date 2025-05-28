@@ -34,7 +34,6 @@ async function downloadAudioWithYTDLP(
 	if (!cookiesContent.trim()) {
 		throw new Error("Cookies file is empty. Please provide valid cookies.");
 	}
-
 	await youtubedl(youtubeUrl, {
 		extractAudio: true,
 		audioFormat: "mp3",
