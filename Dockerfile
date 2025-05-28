@@ -1,4 +1,5 @@
-FROM  node:18
+FROM node:18
+
 
 RUN apt-get update && apt-get install -y \
     libnss3 \
@@ -11,24 +12,23 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libgbm1 \
     libpango-1.0-0 \
-    libcario2 \
+    libcairo2 \
     libasound2 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
-
 
 WORKDIR /app
 
-COPY package.json ./
+COPY package*.json ./
 
 RUN npm install
 
-RUN npx playwright install -with-deps
+RUN npx playwright install
 
 COPY . .
 
-Run npm run build
+RUN npm run build
 
-
-EXPOSE 1000
+EXPOSE 10000
 
 CMD ["node", "dist/index.js"]
