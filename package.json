@@ -3,7 +3,6 @@
 	"version": "1.0.0",
 	"description": "Sample Server",
 	"main": "index.js",
-	"type": "module",
 	"scripts": {
 		"start": "npm run build && node --expose-gc dist/index.js",
 		"dev": "nodemon index.ts",
