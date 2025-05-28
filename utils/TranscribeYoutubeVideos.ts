@@ -8,6 +8,8 @@ import { v4 as uuidv4 } from "uuid";
 import { TranscriptionResponse } from "../types/transcription";
 import { WaveFile } from "wavefile";
 import { PassThrough } from "stream";
+import { memoryUsage } from "process";
+import { updateYouTubeCookies } from "./updateCookies";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -18,52 +20,75 @@ if (!fs.existsSync(Output_Dir)) {
 	console.log(`[INFO] Created temporary audio directory: ${Output_Dir}`);
 }
 
-// Define interface for YouTube metadata
 interface YouTubeMetadata {
 	duration?: string | number;
+	requested_formats?: Array<{ filesize?: number }>;
 	[key: string]: any;
 }
 
-async function getVideoDuration(youtubeUrl: string): Promise<number> {
-	try {
-		const info = (await youtubedl(youtubeUrl, {
-			dumpSingleJson: true,
-		})) as YouTubeMetadata;
-		const duration = info.duration ? parseFloat(info.duration.toString()) : 0;
-		if (isNaN(duration)) {
-			throw new Error("Invalid duration received from YouTube metadata");
+async function getVideoDuration(
+	youtubeUrl: string,
+	retries = 3,
+	delay = 5000
+): Promise<number> {
+	for (let attempt = 1; attempt <= retries; attempt++) {
+		try {
+			const info = (await youtubedl(youtubeUrl, {
+				dumpSingleJson: true,
+			})) as YouTubeMetadata;
+			if (!info || typeof info !== "object" || !info.duration) {
+				throw new Error("Invalid or missing metadata from YouTube");
+			}
+			const duration =
+				typeof info.duration === "string" || typeof info.duration === "number"
+					? parseFloat(info.duration.toString())
+					: 0;
+			if (isNaN(duration)) {
+				throw new Error("Invalid duration received from YouTube metadata");
+			}
+			return duration;
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : String(error);
+			if (
+				errorMsg.includes("429") ||
+				errorMsg.includes("Sign in") ||
+				errorMsg.includes("Login required")
+			) {
+				console.warn(
+					`[WARN] Duration fetch attempt ${attempt} failed: ${errorMsg}`
+				);
+				if (attempt < retries) {
+					console.log(`[INFO] Retrying after ${delay}ms...`);
+					await new Promise((resolve) => setTimeout(resolve, delay));
+					await updateYouTubeCookies();
+				} else {
+					throw new Error(
+						`Failed to fetch video duration after ${retries} attempts: ${errorMsg}`
+					);
+				}
+			} else {
+				throw new Error(`Failed to fetch video duration: ${errorMsg}`);
+			}
 		}
-		return duration;
-	} catch (error) {
-		throw new Error(
-			`Failed to fetch video duration: ${
-				error instanceof Error ? error.message : String(error)
-			}`
-		);
 	}
+	throw new Error("Unexpected error in getVideoDuration");
 }
 
 async function downloadAudioWithYTDLP(
 	youtubeUrl: string,
-	outputPath: string
+	outputPath: string,
+	retries = 3,
+	delay = 5000
 ): Promise<void> {
 	console.log(`[INFO] Attempting to download audio to: ${outputPath}`);
 
 	const cookiesPath = path.resolve(__dirname, "../cookies.txt");
 	console.log(`[INFO] Cookies path: ${cookiesPath}`);
 
-	if (!fs.existsSync(cookiesPath)) {
-		console.warn(
-			"[WARN] Cookies file not found, attempting without cookies..."
-		);
-	}
-
-	const cookiesContent = fs.existsSync(cookiesPath)
-		? fs.readFileSync(cookiesPath, "utf-8")
-		: "";
-	const hasValidCookies =
-		cookiesContent &&
-		cookiesContent
+	let hasValidCookies = false;
+	if (fs.existsSync(cookiesPath)) {
+		const cookiesContent = fs.readFileSync(cookiesPath, "utf-8");
+		hasValidCookies = cookiesContent
 			.split("\n")
 			.filter((line) => !line.startsWith("#") && line.trim())
 			.some((line) => {
@@ -86,17 +111,26 @@ async function downloadAudioWithYTDLP(
 				);
 			});
 
-	if (!hasValidCookies && fs.existsSync(cookiesPath)) {
-		console.warn(
-			"[WARN] No valid cookies found in cookies.txt. Attempting without cookies..."
-		);
+		if (!hasValidCookies) {
+			console.warn(
+				"[WARN] No valid cookies found in cookies.txt. Updating cookies..."
+			);
+			await updateYouTubeCookies();
+			hasValidCookies = fs.existsSync(cookiesPath);
+		}
+	} else {
+		console.warn("[WARN] Cookies file not found. Creating new cookies...");
+		await updateYouTubeCookies();
+		hasValidCookies = fs.existsSync(cookiesPath);
 	}
 
 	const MAX_FILE_SIZE_MB = 25;
 	const downloadOptions = {
 		extractAudio: true,
 		audioFormat: "mp3",
+		audioQuality: 9,
 		output: path.resolve(outputPath),
+		maxFilesize: `${MAX_FILE_SIZE_MB}m`,
 		noCheckCertificates: true,
 		referer: youtubeUrl,
 		quiet: true,
@@ -108,27 +142,70 @@ async function downloadAudioWithYTDLP(
 		retries: 5,
 	};
 
+	// Pre-download file size check
 	try {
-		await youtubedl(youtubeUrl, downloadOptions);
-		const stats = fs.statSync(outputPath);
-		if (stats.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-			fs.unlinkSync(outputPath);
-			throw new Error(`Downloaded file exceeds ${MAX_FILE_SIZE_MB} MB limit`);
+		const info = await youtubedl(youtubeUrl, { dumpSingleJson: true });
+		if (
+			typeof info === "object" &&
+			info.requested_formats &&
+			Array.isArray(info.requested_formats)
+		) {
+			const fileSizeMB = info.requested_formats[0]?.filesize
+				? info.requested_formats[0].filesize / 1024 / 1024
+				: 0;
+			if (fileSizeMB > MAX_FILE_SIZE_MB) {
+				throw new Error(
+					`Estimated file size (${fileSizeMB.toFixed(
+						2
+					)} MB) exceeds ${MAX_FILE_SIZE_MB} MB limit`
+				);
+			}
+		} else {
+			console.warn(
+				"[WARN] Unable to estimate file size: Invalid metadata format"
+			);
 		}
 	} catch (error) {
-		if (
-			String(error).includes("403") ||
-			String(error).includes("Login required")
-		) {
-			console.warn("[WARN] Trying without cookies for public video...");
-			await youtubedl(youtubeUrl, { ...downloadOptions, cookies: undefined });
+		console.warn("[WARN] Failed to estimate file size:", error);
+	}
+
+	for (let attempt = 1; attempt <= retries; attempt++) {
+		try {
+			console.log("[INFO] Starting download with youtube-dl-exec");
+			await youtubedl(youtubeUrl, downloadOptions);
 			const stats = fs.statSync(outputPath);
+			console.log(
+				`[INFO] Downloaded file size: ${(stats.size / 1024 / 1024).toFixed(
+					2
+				)} MB`
+			);
 			if (stats.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
 				fs.unlinkSync(outputPath);
 				throw new Error(`Downloaded file exceeds ${MAX_FILE_SIZE_MB} MB limit`);
 			}
-		} else {
-			throw error;
+			return;
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : String(error);
+			if (
+				errorMsg.includes("429") ||
+				errorMsg.includes("403") ||
+				errorMsg.includes("Sign in") ||
+				errorMsg.includes("Login required")
+			) {
+				console.warn(`[WARN] Download attempt ${attempt} failed: ${errorMsg}`);
+				if (attempt < retries) {
+					console.log(`[INFO] Retrying after ${delay}ms...`);
+					await new Promise((resolve) => setTimeout(resolve, delay));
+					await updateYouTubeCookies();
+					downloadOptions.cookies = cookiesPath;
+				} else {
+					throw new Error(
+						`Download failed after ${retries} attempts: ${errorMsg}`
+					);
+				}
+			} else {
+				throw error;
+			}
 		}
 	}
 }
@@ -144,16 +221,21 @@ async function convertVideoToWavStream(
 			.audioCodec("pcm_s16le")
 			.format("wav")
 			.audioChannels(1)
-			.audioFrequency(16000)
+			.audioFrequency(8000)
 			.on("error", (err) => reject(new Error(`FFmpeg failed: ${err.message}`)))
 			.pipe(stream);
 
 		stream.on("data", (chunk) => chunks.push(chunk));
 		stream.on("end", () => {
 			const wavBuffer = Buffer.concat(chunks);
+			console.log(
+				`[INFO] WAV buffer size: ${(wavBuffer.length / 1024 / 1024).toFixed(
+					2
+				)} MB`
+			);
 			const wav = new WaveFile(wavBuffer);
 			wav.toBitDepth("32f");
-			wav.toSampleRate(16000);
+			wav.toSampleRate(8000);
 			const audioData = wav.getSamples();
 			resolve(
 				Array.isArray(audioData)
@@ -178,7 +260,6 @@ async function initializeTranscriber() {
 	}
 }
 
-// Preload transcriber at startup
 initializeTranscriber().catch((err) =>
 	console.error("[ERROR] Failed to preload transcriber:", err)
 );
@@ -193,11 +274,11 @@ async function getTranscriber() {
 async function cleanupFiles(...paths: string[]): Promise<void> {
 	await Promise.all(
 		paths.map((p) =>
-			fs.promises
-				.unlink(p)
-				.catch((err) =>
-					console.warn(`[WARN] Failed to delete ${p}: ${err.message}`)
-				)
+			fs.promises.unlink(p).catch((err) => {
+				if (err.code !== "ENOENT") {
+					console.warn(`[WARN] Failed to delete ${p}: ${err.message}`);
+				}
+			})
 		)
 	);
 }
@@ -210,10 +291,11 @@ export default async function transcribeYoutubeVideo(
 
 	try {
 		console.log(`\n--- Transcription Request for URL: ${youtubeUrl} ---`);
+		console.log("[INFO] Memory usage at start:", memoryUsage());
 
-		// Check video duration
-		const maxDuration = 120; // 2 minutes
+		const maxDuration = 180;
 		const duration = await getVideoDuration(youtubeUrl);
+		console.log(`[INFO] Video duration: ${duration}s`);
 		if (duration > maxDuration) {
 			return {
 				transcription: "",
@@ -233,24 +315,33 @@ export default async function transcribeYoutubeVideo(
 			last10: float32AudioData.slice(-10),
 			isAllZeros: float32AudioData.every((val) => val === 0),
 		});
+		console.log("[INFO] Memory usage after WAV conversion:", memoryUsage());
 
 		const transcriber = await getTranscriber();
 		console.log("[INFO] Starting transcription with Xenova/whisper-tiny.en");
 
-		const chunkSize = 10 * 16000; // 10 seconds at 16kHz
+		const chunkSize = 5 * 8000;
 		const transcriptions: string[] = [];
 
 		for (let i = 0; i < float32AudioData.length; i += chunkSize) {
 			const chunk = float32AudioData.subarray(i, i + chunkSize);
 			console.log(
-				`[INFO] Transcribing chunk ${i / 16000}s to ${(i + chunkSize) / 16000}s`
+				`[INFO] Transcribing chunk ${i / 8000}s to ${(i + chunkSize) / 8000}s`
+			);
+			console.log(
+				"[INFO] Memory usage before chunk transcription:",
+				memoryUsage()
 			);
 			const result = await transcriber(chunk, {
-				chunk_length_s: 10,
-				stride_length_s: 2,
+				chunk_length_s: 5,
+				stride_length_s: 1,
 				language: "english",
 				task: "transcribe",
 			});
+			console.log(
+				"[INFO] Memory usage after chunk transcription:",
+				memoryUsage()
+			);
 			transcriptions.push(
 				Array.isArray(result)
 					? result.map((c) => c.text).join(" ")
@@ -273,6 +364,7 @@ export default async function transcribeYoutubeVideo(
 		} else {
 			console.log(`[INFO] Full transcription: "${transcriptionText}"`);
 		}
+		console.log("[INFO] Memory usage at end:", memoryUsage());
 
 		return {
 			transcription: transcriptionText,
