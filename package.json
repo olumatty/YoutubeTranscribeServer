@@ -14,8 +14,7 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
 		"test": "vitest run",
-		"test:watch": "vitest",
-		"postinstall": "npx playwright install"
+		"test:watch": "vitest"
 	},
 	"keywords": [
 		"Premeee"
