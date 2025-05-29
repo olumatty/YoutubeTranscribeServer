@@ -1,4 +1,4 @@
-import express, { Response, Request } from "express";
+import express, { Response, Request, response } from "express";
 import youtubedl from "youtube-dl-exec";
 import fs from "fs";
 import path from "path";
@@ -7,6 +7,8 @@ import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { pipeline } from "@xenova/transformers";
 import { v4 as uuidv4 } from "uuid";
 import { TranscriptionResponse } from "../types/transcription";
+import { google } from "googleapis";
+import { oauth2Client, TOKEN_PATH } from "../routes/auth";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -17,37 +19,91 @@ if (!fs.existsSync(Output_Dir)) {
 	console.log(`[INFO] Created temporary audio directory: ${Output_Dir}`);
 }
 
+async function loadOrRefreshToken(): Promise<void> {
+	if (fs.existsSync(TOKEN_PATH)) {
+		try {
+			const tokenData = await fs.promises.readFile(TOKEN_PATH, "utf-8");
+			oauth2Client.setCredentials(JSON.parse(tokenData));
+			console.log("[INFO] Token loaded from file");
+		} catch (error) {
+			console.error(
+				"[ERROR] Failed to load token from file:",
+				error instanceof Error ? error.message : String(error)
+			);
+			throw error;
+		}
+	} else {
+		const authUrl = oauth2Client.generateAuthUrl({
+			access_type: "offline",
+			scope: ["https://www.googleapis.com/auth/youtube.readonly"],
+		});
+		console.log("[INFO] Please visit this URL to authorize:", authUrl);
+		throw new Error("Token file not found. Please authorize and try again.");
+	}
+
+	if (
+		oauth2Client.credentials.expiry_date &&
+		oauth2Client.credentials.expiry_date < Date.now()
+	) {
+		console.log("Refreshing OAuth access token");
+		try {
+			const { credentials } = await oauth2Client.refreshAccessToken();
+			oauth2Client.setCredentials(credentials);
+			fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentials));
+			console.log("Refreshed and saved new OAuth tokens");
+		} catch (error) {
+			console.error(
+				`Failed to refresh token: ${
+					error instanceof Error ? error.message : String(error)
+				}`
+			);
+			throw error;
+		}
+	}
+}
+
+async function verifyVideo(videoId: string): Promise<string> {
+	console.log(`[INFO] Verifying video: ${videoId}`);
+	const youtube = google.youtube({ version: "v3", auth: oauth2Client });
+	try {
+		const response = await youtube.videos.list({
+			part: ["id", "snippet"],
+			id: [videoId],
+		});
+		if (!response.data.items || response.data.items.length === 0) {
+			throw new Error("Video not found");
+		}
+		return response.data.items[0].snippet?.title || "unknown title";
+	} catch (error) {
+		console.log(error);
+		throw new Error("Error getting video title");
+	}
+}
 async function downloadAudioWithYTDLP(
 	youtubeUrl: string,
 	outputPath: string
 ): Promise<void> {
 	console.log(`[INFO] Attempting to download audio to: ${outputPath}`);
-
-	const cookiesPath = path.resolve(__dirname, "../cookies.txt");
-	console.log(`[INFO] Cookies path: ${cookiesPath}`);
-
-	if (!fs.existsSync(cookiesPath)) {
-		throw new Error("Cookies file not found. Please update cookies.");
+	try {
+		await youtubedl(youtubeUrl, {
+			extractAudio: true,
+			audioFormat: "mp3",
+			output: path.resolve(outputPath),
+			noCheckCertificates: true,
+			quiet: true,
+			userAgent:
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+			addHeader: [
+				"Authorization: Bearer ${oauth2Client.credentials.access_token}",
+				"accept-language: en-US,en;q=0.9",
+			],
+			retries: 5,
+		});
+		console.log("[INFO] Downloaded audio file");
+	} catch (error) {
+		console.log(error);
+		throw new Error("Error downloading audio file");
 	}
-
-	const cookiesContent = fs.readFileSync(cookiesPath, "utf-8");
-	if (!cookiesContent.trim()) {
-		throw new Error("Cookies file is empty. Please provide valid cookies.");
-	}
-	await youtubedl(youtubeUrl, {
-		extractAudio: true,
-		audioFormat: "mp3",
-		output: path.resolve(outputPath),
-		noCheckCertificates: true,
-		referer: youtubeUrl,
-		quiet: true,
-		cookies: cookiesPath,
-		userAgent:
-			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-		addHeader: ["accept-language: en-US,en;q=0.9"],
-		sleepInterval: 10,
-		retries: 5,
-	});
 }
 
 async function convertVideoToWav(
@@ -83,7 +139,7 @@ async function getTranscriber() {
 		try {
 			transcriberInstance = await pipeline(
 				"automatic-speech-recognition",
-				"Xenova/whisper-tiny"
+				"Xenova/whisper-base"
 			);
 			console.log("[INFO] ASR pipeline initialized.");
 		} catch (error) {
@@ -109,6 +165,18 @@ export default async function transcribeYoutubeVideo(
 
 	try {
 		console.log(`[INFO] Transcription Request for URL: ${youtubeUrl}`);
+
+		const videoIdMatch = youtubeUrl.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/);
+		if (!videoIdMatch) {
+			throw new Error("Invalid YouTube URL");
+		}
+		const videoId = videoIdMatch[1];
+
+		await loadOrRefreshToken();
+
+		// Verify video with API
+		const videoTitle = await verifyVideo(videoId);
+		console.log(`Verified video: ${videoTitle}`);
 
 		await downloadAudioWithYTDLP(youtubeUrl, rawAudioPath);
 
@@ -157,8 +225,8 @@ export default async function transcribeYoutubeVideo(
 			"[INFO] Starting transcription with Xenova/whisper-tiny model..."
 		);
 		const result = await transcriber(floatArray, {
-			chunk_length_s: 10,
-			stride_length_s: 1,
+			chunk_length_s: 30,
+			stride_length_s: 5,
 			language: "english",
 			task: "transcribe",
 		});

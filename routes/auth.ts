@@ -1,39 +1,11 @@
-//import express from 'express';
+import { google } from "googleapis";
+import path from "path";
+import { env } from "../config/env";
 
-//import { authenticate } from '../middlewares/auth';
-//import { validate } from '../middlewares/validate';
-//import {
-//	login,
-//	logout,
-//	changePassword,
-//	sendVerificationOTP,
-//	register,
-// } from '../controllers/auth';
-// import {
-//	loginSchema,
-//	changePasswordSchema,
-//	sendVerificationOTPSchema,
-//	registerSchema,
-// } from '../schemas/auth';
+export const TOKEN_PATH = path.join(__dirname, "../youtube_token.json");
 
-// const router = express.Router();
-
-// Public routes
-// router.post(
-// 	'/send-verification-otp',
-// 	validate(sendVerificationOTPSchema),
-//	sendVerificationOTP
-// );
-// router.post('/register', validate(registerSchema), register);
-// router.post('/login', validate(loginSchema), login);
-// router.post('/logout', logout);
-
-// Protected routes
-// router.post(
-// 	'/change-password',
-// 	authenticate,
-// 	validate(changePasswordSchema),
-// 	changePassword
-// );
-
-// export default router;
+export const oauth2Client = new google.auth.OAuth2(
+	env.GOOGLE_CLIENT_ID,
+	env.GOOGLE_CLIENT_SECRET,
+	env.REDIRECT_URI
+);

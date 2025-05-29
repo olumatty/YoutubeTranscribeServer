@@ -1,5 +1,7 @@
-import express, { RequestHandler } from "express";
+import express, { RequestHandler, Request, Response } from "express";
 import transcribeYoutubeVideo from "../utils/TranscribeYoutubeVideos";
+import { oauth2Client, TOKEN_PATH } from "../routes/auth";
+import fs from "fs";
 
 const router = express.Router();
 
@@ -38,5 +40,24 @@ const transcribeHandler: RequestHandler<{}, any, TranscriptionRequest> = async (
 };
 
 router.post("/", transcribeHandler);
+
+router.get("/oauth2callback", async (req: Request, res: Response) => {
+	const { code } = req.query;
+	if (!code || typeof code !== "string") {
+		console.log("No code provided");
+		res.status(400).json({ success: false, error: "No code provided" });
+		return;
+	}
+	try {
+		const { tokens } = await oauth2Client.getToken(code);
+		oauth2Client.setCredentials(tokens);
+		fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
+		console.log("Token received");
+		res.status(200).json({ success: true, tokens });
+	} catch (error) {
+		console.error("Error getting token:", error);
+		res.status(500).json({ success: false, error: "Error getting token" });
+	}
+});
 
 export default router;
