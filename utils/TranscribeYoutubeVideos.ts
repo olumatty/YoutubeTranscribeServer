@@ -23,8 +23,25 @@ async function loadOrRefreshToken(): Promise<void> {
 	if (fs.existsSync(TOKEN_PATH)) {
 		try {
 			const tokenData = await fs.promises.readFile(TOKEN_PATH, "utf-8");
-			oauth2Client.setCredentials(JSON.parse(tokenData));
+			const tokens = JSON.parse(tokenData);
+			oauth2Client.setCredentials(tokens);
 			console.log("[INFO] Token loaded from file");
+
+			// Check if token is expired and refresh if needed
+			if (tokens.expiry_date && tokens.expiry_date < Date.now()) {
+				console.log("[INFO] Token expired, refreshing...");
+				try {
+					const { credentials } = await oauth2Client.refreshAccessToken();
+					oauth2Client.setCredentials(credentials);
+					await fs.promises.writeFile(TOKEN_PATH, JSON.stringify(credentials));
+					console.log("[INFO] Token refreshed and saved");
+				} catch (refreshError) {
+					console.error("[ERROR] Failed to refresh token:", refreshError);
+					// Delete the invalid token file
+					await fs.promises.unlink(TOKEN_PATH);
+					throw new Error("Token refresh failed. Please re-authorize.");
+				}
+			}
 		} catch (error) {
 			console.error(
 				"[ERROR] Failed to load token from file:",
@@ -38,27 +55,9 @@ async function loadOrRefreshToken(): Promise<void> {
 			scope: ["https://www.googleapis.com/auth/youtube.readonly"],
 		});
 		console.log("[INFO] Please visit this URL to authorize:", authUrl);
-		throw new Error("Token file not found. Please authorize and try again.");
-	}
-
-	if (
-		oauth2Client.credentials.expiry_date &&
-		oauth2Client.credentials.expiry_date < Date.now()
-	) {
-		console.log("Refreshing OAuth access token");
-		try {
-			const { credentials } = await oauth2Client.refreshAccessToken();
-			oauth2Client.setCredentials(credentials);
-			fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentials));
-			console.log("Refreshed and saved new OAuth tokens");
-		} catch (error) {
-			console.error(
-				`Failed to refresh token: ${
-					error instanceof Error ? error.message : String(error)
-				}`
-			);
-			throw error;
-		}
+		throw new Error(
+			"Token file not found. Please authorize first by visiting the auth URL above, then try again."
+		);
 	}
 }
 
@@ -71,14 +70,21 @@ async function verifyVideo(videoId: string): Promise<string> {
 			id: [videoId],
 		});
 		if (!response.data.items || response.data.items.length === 0) {
-			throw new Error("Video not found");
+			throw new Error("Video not found or not accessible");
 		}
-		return response.data.items[0].snippet?.title || "unknown title";
+		const title = response.data.items[0].snippet?.title || "Unknown title";
+		console.log(`[INFO] Video verified: ${title}`);
+		return title;
 	} catch (error) {
-		console.log(error);
-		throw new Error("Error getting video title");
+		console.error("[ERROR] Video verification failed:", error);
+		throw new Error(
+			`Failed to verify video: ${
+				error instanceof Error ? error.message : "Unknown error"
+			}`
+		);
 	}
 }
+
 async function downloadAudioWithYTDLP(
 	youtubeUrl: string,
 	outputPath: string
@@ -88,21 +94,34 @@ async function downloadAudioWithYTDLP(
 		await youtubedl(youtubeUrl, {
 			extractAudio: true,
 			audioFormat: "mp3",
-			output: path.resolve(outputPath),
+			output: outputPath,
 			noCheckCertificates: true,
 			quiet: true,
 			userAgent:
 				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-			addHeader: [
-				"Authorization: Bearer ${oauth2Client.credentials.access_token}",
-				"accept-language: en-US,en;q=0.9",
-			],
-			retries: 5,
+			retries: 3,
+			// Remove the Authorization header as it's not needed for youtube-dl
+			addHeader: ["accept-language: en-US,en;q=0.9"],
 		});
-		console.log("[INFO] Downloaded audio file");
+
+		// Verify the file was actually downloaded
+		if (!fs.existsSync(outputPath)) {
+			throw new Error(`Audio file was not created at ${outputPath}`);
+		}
+
+		const stats = fs.statSync(outputPath);
+		if (stats.size === 0) {
+			throw new Error("Downloaded audio file is empty");
+		}
+
+		console.log(`[INFO] Downloaded audio file (${stats.size} bytes)`);
 	} catch (error) {
-		console.log(error);
-		throw new Error("Error downloading audio file");
+		console.error("[ERROR] Audio download failed:", error);
+		throw new Error(
+			`Failed to download audio: ${
+				error instanceof Error ? error.message : "Unknown error"
+			}`
+		);
 	}
 }
 
@@ -110,9 +129,7 @@ async function convertVideoToWav(
 	inputPath: string,
 	outputPath: string
 ): Promise<void> {
-	console.log(
-		`[INFO] Starting FFmpeg conversion: ${inputPath} -> ${outputPath}`
-	);
+	console.log(`[INFO] Converting audio: ${inputPath} -> ${outputPath}`);
 	return new Promise((resolve, reject) => {
 		ffmpeg(inputPath)
 			.audioCodec("pcm_s16le")
@@ -120,9 +137,11 @@ async function convertVideoToWav(
 			.audioChannels(1)
 			.audioFrequency(16000)
 			.on("error", function (err) {
-				reject(err);
+				console.error("[ERROR] FFmpeg conversion failed:", err);
+				reject(new Error(`Audio conversion failed: ${err.message}`));
 			})
 			.on("end", function () {
+				console.log("[INFO] Audio conversion completed");
 				resolve();
 			})
 			.save(outputPath);
@@ -134,26 +153,37 @@ let transcriberInstance: any;
 async function getTranscriber() {
 	if (!transcriberInstance) {
 		console.log(
-			"[INFO] Initializing ASR pipeline (Xenova/whisper-tiny) for the first time..."
+			"[INFO] Initializing Whisper model (this may take a moment)..."
 		);
 		try {
 			transcriberInstance = await pipeline(
 				"automatic-speech-recognition",
 				"Xenova/whisper-base"
 			);
-			console.log("[INFO] ASR pipeline initialized.");
+			console.log("[INFO] Whisper model initialized successfully");
 		} catch (error) {
-			console.error(
-				`[CRITICAL ERROR] Failed to initialize ASR pipeline (Xenova/whisper-tiny): ${
-					error instanceof Error ? error.message : String(error)
+			console.error("[ERROR] Failed to initialize Whisper model:", error);
+			throw new Error(
+				`Whisper initialization failed: ${
+					error instanceof Error ? error.message : "Unknown error"
 				}`
 			);
-			throw error;
 		}
-	} else {
-		console.log("[INFO] Using existing ASR pipeline instance.");
 	}
 	return transcriberInstance;
+}
+
+async function cleanup(files: string[]): Promise<void> {
+	for (const file of files) {
+		try {
+			if (fs.existsSync(file)) {
+				await fs.promises.unlink(file);
+				console.log(`[INFO] Cleaned up: ${file}`);
+			}
+		} catch (error) {
+			console.warn(`[WARN] Failed to cleanup ${file}:`, error);
+		}
+	}
 }
 
 export default async function transcribeYoutubeVideo(
@@ -164,41 +194,33 @@ export default async function transcribeYoutubeVideo(
 	const wavAudioPath = path.join(Output_Dir, `${fileId}.wav`);
 
 	try {
-		console.log(`[INFO] Transcription Request for URL: ${youtubeUrl}`);
+		console.log(`[INFO] Starting transcription for: ${youtubeUrl}`);
 
+		// Extract video ID
 		const videoIdMatch = youtubeUrl.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/);
 		if (!videoIdMatch) {
-			throw new Error("Invalid YouTube URL");
+			throw new Error("Invalid YouTube URL format");
 		}
 		const videoId = videoIdMatch[1];
+		console.log(`[INFO] Extracted video ID: ${videoId}`);
 
+		// Load/refresh OAuth token
 		await loadOrRefreshToken();
 
-		// Verify video with API
+		// Verify video exists and is accessible
 		const videoTitle = await verifyVideo(videoId);
-		console.log(`Verified video: ${videoTitle}`);
 
+		// Download audio
 		await downloadAudioWithYTDLP(youtubeUrl, rawAudioPath);
 
-		const rawAudioStats = fs.statSync(rawAudioPath);
-		console.log(
-			`[INFO] Downloaded raw audio file size: ${rawAudioStats.size} bytes`
-		);
-
+		// Convert to WAV
 		await convertVideoToWav(rawAudioPath, wavAudioPath);
 
-		const wavAudioStats = fs.statSync(wavAudioPath);
-		console.log(
-			`[INFO] Converted WAV audio file size: ${wavAudioStats.size} bytes`
-		);
-
-		console.log(`[INFO] Reading WAV file into buffer: ${wavAudioPath}`);
+		// Read and process audio data
+		console.log(`[INFO] Reading audio file: ${wavAudioPath}`);
 		const audioBuffer = await fs.promises.readFile(wavAudioPath);
 
-		console.log(
-			`[INFO] Creating Float32Array from audioBuffer (byteLength: ${audioBuffer.byteLength})...`
-		);
-
+		// Convert to Float32Array for Whisper
 		const int16Array = new Int16Array(
 			audioBuffer.buffer,
 			audioBuffer.byteOffset,
@@ -212,50 +234,48 @@ export default async function transcribeYoutubeVideo(
 			floatArray[i] = int16Array[i] / normalizationFactor;
 		}
 
-		console.log("[INFO] Float32Array details:");
-		console.log("  - length:", floatArray.length);
-		console.log("  - First 10 values:", floatArray.slice(0, 10));
-		console.log("  - Last 10 values:", floatArray.slice(-10));
-		const isAllZeros = floatArray.every((val) => val === 0);
-		console.log("  - Is Float32Array all zeros (silent audio)?", isAllZeros);
+		console.log(`[INFO] Processed audio: ${floatArray.length} samples`);
 
+		// Check for silent audio
+		let maxAmplitude = 0;
+		for (let i = 0; i < floatArray.length; i++) {
+			const absValue = Math.abs(floatArray[i]);
+			if (absValue > maxAmplitude) {
+				maxAmplitude = absValue;
+			}
+		}
+		if (maxAmplitude < 0.001) {
+			console.warn("[WARN] Audio appears to be silent or very quiet");
+		}
+		// Transcribe with Whisper
 		const transcriber = await getTranscriber();
+		console.log("[INFO] Starting transcription...");
 
-		console.log(
-			"[INFO] Starting transcription with Xenova/whisper-tiny model..."
-		);
 		const result = await transcriber(floatArray, {
 			chunk_length_s: 30,
 			stride_length_s: 5,
 			language: "english",
 			task: "transcribe",
 		});
-		console.log("[INFO] Transcription process finished.");
 
-		console.log("[INFO] Cleaning up temporary files...");
-		await fs.promises.unlink(rawAudioPath);
-		await fs.promises.unlink(wavAudioPath);
-		console.log("[INFO] Temporary files cleaned up.");
-
+		// Extract transcription text
 		const transcriptionText = Array.isArray(result)
-			? result.map((chunk) => chunk.text).join(" ")
-			: result.text || "";
+			? result
+					.map((chunk) => chunk.text)
+					.join(" ")
+					.trim()
+			: (result.text || "").trim();
 
 		console.log(
-			`[INFO] Final transcription result length: ${transcriptionText.length}`
+			`[INFO] Transcription completed (${transcriptionText.length} characters)`
 		);
-		if (transcriptionText.length > 100) {
-			console.log(
-				`[INFO] Transcription snippet: "${transcriptionText.substring(
-					0,
-					100
-				)}..."`
-			);
-		} else {
-			console.log(`[INFO] Full Transcription result: "${transcriptionText}"`);
+
+		if (transcriptionText.length === 0) {
+			console.warn("[WARN] Transcription result is empty");
 		}
 
-		console.log("[INFO] End Transcription Request");
+		// Clean up temporary files
+		await cleanup([rawAudioPath, wavAudioPath]);
 
 		return {
 			transcription: transcriptionText,
@@ -263,21 +283,15 @@ export default async function transcribeYoutubeVideo(
 			success: true,
 		};
 	} catch (error) {
-		console.error(
-			`[CRITICAL ERROR] Transcription process failed: ${
-				error instanceof Error ? error.message : String(error)
-			}`
-		);
+		console.error("[ERROR] Transcription failed:", error);
+
+		// Clean up on error
+		await cleanup([rawAudioPath, wavAudioPath]);
 
 		return {
 			transcription: "",
-			error: `Failed to transcribe video due to an unexpected error: ${
-				error instanceof Error ? error.message : "Unknown error"
-			}`,
+			error: error instanceof Error ? error.message : "Unknown error occurred",
 			success: false,
 		};
-	} finally {
-		if (fs.existsSync(rawAudioPath)) await fs.promises.unlink(rawAudioPath);
-		if (fs.existsSync(wavAudioPath)) await fs.promises.unlink(wavAudioPath);
 	}
 }

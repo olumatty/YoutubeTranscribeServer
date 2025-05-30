@@ -1,32 +1,31 @@
+// src/index.ts
 import "./types";
-
-// Load Environmental Variables
 import "./helpers/setupEnv";
 import { env } from "./config/env";
-
-// Middleware imports
 import corsHandler from "./middlewares/corsHandler";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 import express from "express";
 import cookieParser from "cookie-parser";
-import transcriptionRouter from "./routes/index";
+import transcriptionRouter, { oauthRouter } from "./routes";
 
 const app = express();
 
-// Middlewares
+console.log("[INFO] Setting up Express app at", new Date().toISOString());
+
 app.use(corsHandler);
 app.use(express.json());
 app.use(cookieParser());
 app.set("trust proxy", true);
 
-// Routes
 app.use("/api/transcribe", transcriptionRouter);
+app.use("/", oauthRouter);
 
-// Error Handling
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// connection
 app.listen(env.PORT, () =>
-	console.log(`Server running on port ${env.PORT} in ${env.NODE_ENV} mode`)
+	console.log(
+		`[INFO] Server running on port ${env.PORT} in ${env.NODE_ENV} mode at`,
+		new Date().toISOString()
+	)
 );

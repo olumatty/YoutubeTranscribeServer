@@ -87,6 +87,7 @@ web_modules/
 # Next.js build output
 .next
 out
+.txt
 
 # Nuxt.js build / generate output
 .nuxt
@@ -156,3 +157,4 @@ utils/temp_audio/
 utils/temp_music/
 utils/temp_sounds/
 
+youtube_token.json

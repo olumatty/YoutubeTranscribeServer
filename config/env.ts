@@ -45,15 +45,9 @@ export const env = {
 		"https://youtube-transcribe-rho.vercel.app"
 	).split(","),
 
-	GOOGLE_CLIENT_ID: getEnv("YOUTUBE_CLIENT_ID", "your_actual_client_id"),
-	GOOGLE_CLIENT_SECRET: getEnv(
-		"YOUTUBE_CLIENT_SECRET",
-		"your_actual_client_secret"
-	),
-	REDIRECT_URI: getEnv(
-		"YOUTUBE_REDIRECT_URI",
-		"https://youtubetranscribeserver-1.onrender.com/oauth2callback"
-	),
+	GOOGLE_CLIENT_ID: getEnv("YOUTUBE_CLIENT_ID", ""),
+	GOOGLE_CLIENT_SECRET: getEnv("YOUTUBE_CLIENT_SECRET", ""),
+	REDIRECT_URI: getEnv("YOUTUBE_REDIRECT_URI", ""),
 	isDevelopment,
 	isProduction,
 
@@ -102,9 +96,9 @@ const optionalEnvVars: Partial<
 	PORT: 4000,
 	NODE_ENV: "production",
 	ALLOWED_ORIGINS: "https://youtube-transcribe-rho.vercel.app",
-	GOOGLE_CLIENT_ID: "your_actual_client_id",
-	GOOGLE_CLIENT_SECRET: "your_actual_client_secret",
-	REDIRECT_URI: "https://youtubetranscribeserver-1.onrender.com/oauth2callback",
+	GOOGLE_CLIENT_ID: "",
+	GOOGLE_CLIENT_SECRET: "",
+	REDIRECT_URI: "",
 
 	// Auth
 	//JWT_EXPIRES_IN: '7d',
