@@ -45,9 +45,9 @@ export const env = {
 		"https://youtube-transcribe-rho.vercel.app"
 	).split(","),
 
-	GOOGLE_CLIENT_ID: getEnv("YOUTUBE_CLIENT_ID", ""),
-	GOOGLE_CLIENT_SECRET: getEnv("YOUTUBE_CLIENT_SECRET", ""),
-	REDIRECT_URI: getEnv("YOUTUBE_REDIRECT_URI", ""),
+	GOOGLE_CLIENT_ID: getEnv("GOOGLE_CLIENT_ID"),
+	GOOGLE_CLIENT_SECRET: getEnv("GOOGLE_CLIENT_SECRET"),
+	REDIRECT_URI: getEnv("REDIRECT_URI"),
 	isDevelopment,
 	isProduction,
 
@@ -83,6 +83,9 @@ const requiredEnvVars: (keyof typeof env)[] = [
 	//'B2_APPLICATION_KEY',
 	//'B2_BUCKET_ID',
 	//'B2_BUCKET_NAME',
+	"GOOGLE_CLIENT_ID",
+	"GOOGLE_CLIENT_SECRET",
+	"REDIRECT_URI",
 ];
 
 // Optional environment variables with default values
@@ -96,9 +99,6 @@ const optionalEnvVars: Partial<
 	PORT: 4000,
 	NODE_ENV: "production",
 	ALLOWED_ORIGINS: "https://youtube-transcribe-rho.vercel.app",
-	GOOGLE_CLIENT_ID: "",
-	GOOGLE_CLIENT_SECRET: "",
-	REDIRECT_URI: "",
 
 	// Auth
 	//JWT_EXPIRES_IN: '7d',
