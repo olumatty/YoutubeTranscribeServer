@@ -15,7 +15,7 @@ interface TranscriptionRequest {
 
 const transcribeHandler: RequestHandler = async (req, res) => {
 	console.log("[INFO] Handling request:", req.method, req.originalUrl);
-	const youtubeUrl = req.body.youtubeUrl || req.query.url;
+	const youtubeUrl = req.body.videoUrl || req.body.youtubeUrl || req.query.url;
 
 	if (!youtubeUrl || typeof youtubeUrl !== "string") {
 		console.error("[ERROR] YouTube URL is required");
@@ -32,13 +32,16 @@ const transcribeHandler: RequestHandler = async (req, res) => {
 		}
 		console.log(`[INFO] Transcription successful for ${youtubeUrl}`);
 		res.json({
+			videoId: result.videoId,
 			transcription: result.transcription,
+			segments: result.segments,
+			segmentCount: result.segments?.length ?? 0,
 			success: true,
 		});
 	} catch (error) {
 		console.error(
 			`[CRITICAL ERROR] Transcription failed for ${youtubeUrl}:`,
-			error instanceof Error ? error.stack : String(error)
+			error instanceof Error ? error.stack : String(error),
 		);
 		res.status(500).json({
 			success: false,
